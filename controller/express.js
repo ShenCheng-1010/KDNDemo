@@ -1,102 +1,78 @@
 const config = require('../config/express');
 const axios = require('axios');
 const crypto = require('crypto');
-const md5 = crypto.createHash('md5');
-const { base64encode } = require('nodejs-base64');
-// const URL = require('url');
-const urlencode = require('urlencode');
+const {base64encode} = require('nodejs-base64');
+const querystring = require('querystring');
 
 /**
- * 
- *
+ * 需要传入三个参数
+ 订单编号
+ 快递公司编号
+ 快递单号
  */
-async function getOrderTracesByJson() {
+async function getOrderTracesByJson(ctx) {
     //OrderCode订单编号,不可重复,自定义  ShipperCode快递公司编码 LogisticCode快递单号
     // let requestData = "{'OrderCode':'','ShipperCode':'YTO','LogisticCode':'12345678'}"
+    const {OrderCode, ShipperCode, LogisticCode} = ctx.query;
+    if (!ShipperCode || !LogisticCode){
+        throw ("缺少必要参数！");
+    }
     let data = {
-        OrderCode: "",
-        ShipperCode: "YTO",
-        LogisticCode: "12345678"
+        OrderCode: OrderCode,
+        ShipperCode: ShipperCode,
+        LogisticCode: LogisticCode
     };
     let requestData = JSON.stringify(data);
-    
-    let datas = new Map();
-    datas.set('EBusinessID', config.EBusinessID); //用户ID
-    datas.set('RequestType', '1002');          //请求指令类型
-    datas.set('RequestData', urlencode(requestData)) ;  //数据内容 编码UTF-8
-    datas.set('DataType', '2');                      //返回数据为json
-    datas.set('DataSign', encrypt(requestData, config.AppKey));
-    // console.log("datas length");
-    // console.log(urlencode(requestData));
-    // console.log(datas.get('RequestData'))
-    // console.log(datas.get('DataSign'))   
+    let sign = encrypt(requestData, config.AppKey);
+    // console.log(sign);
+    let PostData = querystring.stringify(
+        {
+            EBusinessID: config.EBusinessID,
+            RequestType: '1002',
+            RequestData: requestData,
+            DataType: '2',
+            DataSign: sign
+        }
+    );
+    // console.log(PostData);
 
-    return await sendPost(config.ReqURL, datas);
-}
-/*
-* 电商sign 签名生成
-* @param data 内容
-* @param appkey AppKey
-* @return DataSign签名
-*/
-function encrypt(data, appkey) {
-    return encodeURIComponent(base64encode(md5.update(data + appkey).digest('hex')))
-    // console.log(data);
-    //
-    // console.log("-------encrypt-------");
-    // let a = md5.update(data + appkey).digest('hex');
-    // console.log(a);
-    // let b = base64encode(a);
-    // console.log(b);
-    // let c =  encodeURIComponent(b);
-    // console.log(c);
-    // console.log("----end encrypt------");
-    // return c;
+    // return await sendPost(config.ReqURL, PostData);
+    return sendPost(config.ReqURL, PostData);
 }
 
 /**
- * http://sandboxapi.kdniao.com:8080/kdniaosandbox/gateway/exterfaceInvoke.json
+* 电商sign 签名生成
+* @param data 内容
+* @param AppKey AppKey
+* @return string
+*/
+function encrypt(data, AppKey) {
+    let md5 = crypto.createHash('md5');
+    return encodeURI(base64encode(md5.update(data + AppKey).digest('hex')))
+}
+
+/**
+ *
  * @param {*} ReqURL 请求地址
- * @param {*} datas 
+ * @param {*} PostData
+ * @return string
  */
-async function sendPost(ReqURL, datas) {
-
-    // let url = URL.parse(ReqURL)['host'];
-    // console.log(typeof datas);
-    // let req = ""
-    // datas.forEach((data, index) => {
-    //     req = req + index + "=" + data + "&"
-    // })
-    // let re = req.replace(/.$/, '')  //删除最后一个$ 符号
-    // console.log(re);
-    // console.log(typeof myjson);
-
+async function sendPost(ReqURL, PostData) {
 
     axios({
         url: ReqURL,
         method: 'POST',
-        data: {
-            //    key value 形式
-            EBusinessID: 'test1536407',
-            RequestType: '1002',
-            RequestData: '%7B%22OrderCode%22%3A%22%22%2C%22ShipperCode%22%3A%22YTO%22%2C%22LogisticCode%22%3A%2212345678%22%7D',
-            DataType: '2',
-            DataSign: 'ZmQ0ZDliYTE2OWE3MTUwM2JhMWNlNmEzMDRlMDJmNWY%3D'
-            // */
-            // datas
-        },
+        data: PostData,
         headers: {
-            // "user-agent": "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1;SV1)",
-            // 'Content-Type': 'application/x-www-form-urlencoded',
-            // 'Content-Length': ,
-            // 'Connection': 'close'
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'charset': 'utf-8'
         }
     }).then(res => {
-        console.log('res:' + res);
+        return res.data
 
     }).catch(error => {
         console.log('e:' + error);
-
+        throw(error)
     })
 
 }
